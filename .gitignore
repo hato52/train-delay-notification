@@ -179,5 +179,5 @@ pyrightconfig.json
 .claude/*
 !**/.gitkeep
 
-# デバッグ用HTML出力
-debug_html/
+package
+*.zip
