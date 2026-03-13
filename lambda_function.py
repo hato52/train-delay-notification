@@ -23,15 +23,15 @@ SNS_TOPIC_ARN = "SNS_TOPIC_ARNをここに設定してください"  # 例: "arn
 TARGET_LINES = [
     {
         "name": "UTSUNOMIYA_TOKYO_LINE",
-        "url": "https://transit.yahoo.co.jp/traininfo/detail/46/46/",
+        "url": "https://transit.yahoo.co.jp/diainfo/46/46",
     },
     {
         "name": "UTSUNOMIYA_KUROISO_LINE",
-        "url": "https://transit.yahoo.co.jp/traininfo/detail/46/47/",
+        "url": "https://transit.yahoo.co.jp/diainfo/46/47",
     },
     {
         "name": "GINZA_LINE",
-        "url": "https://transit.yahoo.co.jp/traininfo/detail/132/0/",
+        "url": "https://transit.yahoo.co.jp/diainfo/132/0",
     },
 ]
 
@@ -79,11 +79,22 @@ def get_all_train_info() -> list[TrainInfo]:
     return results
 
 
+def is_normal(status: str) -> bool:
+    return status == "平常運転"
+
+
+def get_status_icon(status: str) -> str:
+    if is_normal(status):
+        return "🟢 "
+    return "⚠️ "
+
+
 def format_message(results: list[TrainInfo]) -> str:
     lines = ["=== 運行情報 ===\n"]
     for info in results:
+        icon = get_status_icon(info.status)
         lines.append(f"【{info.name}】")
-        lines.append(f"  状況: {info.status}")
+        lines.append(f"  状況: {icon}{info.status}")
         lines.append(f"  詳細: {info.detail}\n")
     return "\n".join(lines)
 
@@ -104,8 +115,14 @@ def lambda_handler(event, context):
         logger.error("通信エラー: %s", e)
         return {"statusCode": 500, "body": f"通信エラー: {e}"}
 
-    message = format_message(results)
-    publish_to_sns(message)
+    abnormal_results = [info for info in results if not is_normal(info.status)]
+
+    if abnormal_results:
+        message = format_message(results)
+        publish_to_sns(message)
+        logger.info("異常あり: %d路線に遅延・運休等を検出、SNS通知済み", len(abnormal_results))
+    else:
+        logger.info("全路線平常運転のため、通知をスキップ")
 
     body = [asdict(info) for info in results]
     logger.info("取得完了: %d路線", len(body))
